@@ -16,8 +16,8 @@ Production-grade API Test Automation curriculum, frameworks, and engineering not
 | **06** | Enterprise Framework Client Architecture (`BaseClient` & Domains) | 🟢 Complete |
 | **07** | CRUD API Testing & Test Isolation Patterns | 🟢 Complete |
 | **08** | Contract & JSON Schema Validation | 🟢 Complete |
-| **09** | Authentication Engines (JWT, OAuth 2.0, Refresh Tokens) | 🟡 In Progress |
-| **10** | API Security & OWASP Top 10 (Focus: BOLA / IDOR) | ⚪ Planned |
+| **09** | Authentication Engines (JWT, OAuth 2.0, Refresh Tokens) | 🟢 Complete |
+| **10** | API Security & OWASP Top 10 (Focus: BOLA / IDOR) | 🟡 In Progress |
 | **11** | Database Assertions with SQL & PostgreSQL | ⚪ Planned |
 | **12** | Mocking & Service Virtualization | ⚪ Planned |
 | **13** | Asynchronous APIs, Polling & Webhooks | ⚪ Planned |

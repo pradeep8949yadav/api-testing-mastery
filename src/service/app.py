@@ -155,3 +155,90 @@ def reset_db():
     with _lock:
         _projects_db.clear()
         return {"status": "reset complete"}
+
+
+# ─── AUTHENTICATION & AUTHORIZATION ENGINE ───
+
+from fastapi import Header
+import jwt
+
+JWT_SECRET_KEY = "atlassian-sdet-super-secret-key-production"
+JWT_ALGORITHM = "HS256"
+
+
+class LoginModel(BaseModel):
+    username: str
+    password: str
+    role: Optional[str] = "Developer"
+
+
+@app.post("/api/v1/auth/login", status_code=status.HTTP_200_OK)
+def login(payload: LoginModel):
+    """Simulate OAuth/JWT token issuance."""
+    import time
+    if payload.password == "wrong_password":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials.",
+        )
+    
+    now = int(time.time())
+    token_payload = {
+        "sub": payload.username,
+        "role": payload.role,
+        "iat": now,
+        "exp": now + 900,  # 15 minutes
+    }
+    token = jwt.encode(token_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_in": 900,
+        "role": payload.role,
+    }
+
+
+def _verify_auth_token(authorization: Optional[str]) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header.",
+        )
+    token = authorization.split("Bearer ")[1].strip()
+    try:
+        return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired.",
+        )
+    except (jwt.InvalidTokenError, Exception):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token signature.",
+        )
+
+
+@app.delete("/api/v1/secure/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def secure_delete_project(project_id: str, authorization: Optional[str] = Header(default=None)):
+    """
+    Role-Based Access Control (RBAC) Protected Endpoint:
+    - Requires valid JWT in Authorization header.
+    - Requires role == 'Admin'. Viewers receive 403 Forbidden.
+    """
+    user_claims = _verify_auth_token(authorization)
+    if user_claims.get("role") != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Forbidden: Role '{user_claims.get('role')}' does not have Admin permission to delete projects.",
+        )
+
+    with _lock:
+        if project_id not in _projects_db:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project_id}' not found.",
+            )
+        del _projects_db[project_id]
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
