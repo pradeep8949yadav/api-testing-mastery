@@ -3,16 +3,6 @@ from src.clients.base_client import BaseClient
 from src.models.issue import IssueCreate
 
 
-@pytest.fixture(scope="session")
-def api_client():
-    """
-    Session-scoped client fixture.
-    Creates a single connection pool reused across all tests,
-    and cleanly closes sockets at the end of the test session.
-    """
-    client = BaseClient(base_url="https://httpbin.org", timeout=(3.05, 10.0))
-    yield client
-    client.close()
 
 
 class TestBaseClient:

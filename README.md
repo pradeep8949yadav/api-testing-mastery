@@ -12,8 +12,8 @@ Production-grade API Test Automation curriculum, frameworks, and engineering not
 | **02** | Terminal-First API Debugging with cURL & Wire Inspection | 🟢 Complete |
 | **03** | Resilient Python HTTP Engine (`Session`, Timeouts, Retries) | 🟢 Complete |
 | **04** | Test Data Modeling (`dataclass` vs `Pydantic` vs `dict`) | 🟢 Complete |
-| **05** | Pytest Deep Dive (Fixtures, Scopes, Isolation, Parametrization) | 🟡 In Progress |
-| **06** | Enterprise Framework Client Architecture (`BaseClient` & Domains) | ⚪ Planned |
+| **05** | Pytest Deep Dive (Fixtures, Scopes, Isolation, Parametrization) | 🟢 Complete |
+| **06** | Enterprise Framework Client Architecture (`BaseClient` & Domains) | 🟡 In Progress |
 | **07** | CRUD API Testing & Test Isolation Patterns | ⚪ Planned |
 | **08** | Contract & JSON Schema Validation | ⚪ Planned |
 | **09** | Authentication Engines (JWT, OAuth 2.0, Refresh Tokens) | ⚪ Planned |
