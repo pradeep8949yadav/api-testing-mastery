@@ -62,12 +62,20 @@ class BaseClient:
         return urljoin(self.base_url, endpoint.lstrip("/"))
 
     def _send_request(self, method: str, endpoint: str, **kwargs) -> ApiResponse:
-        """Internal dispatcher that applies timeouts and wraps the response."""
+        """Internal dispatcher that injects trace IDs, applies timeouts, and wraps response."""
+        import uuid
+
         url = self._build_url(endpoint)
         
         # Apply default timeout if caller didn't supply one
         if "timeout" not in kwargs:
             kwargs["timeout"] = self.timeout
+
+        # Dynamic correlation ID per request for observability
+        request_headers = kwargs.get("headers", {})
+        if "X-Request-ID" not in request_headers:
+            request_headers["X-Request-ID"] = str(uuid.uuid4())
+        kwargs["headers"] = request_headers
 
         raw_response = self.session.request(method=method, url=url, **kwargs)
         return ApiResponse(raw_response)

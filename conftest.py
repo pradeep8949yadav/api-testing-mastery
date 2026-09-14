@@ -4,12 +4,26 @@ from src.clients.base_client import BaseClient
 
 @pytest.fixture(scope="session")
 def api_client():
-    """
-    Session-scoped BaseClient.
-    Initializes a persistent HTTP session with connection pooling and retries.
-    Gracefully closes all TCP connections when the test suite execution completes.
-    """
+    """Session-scoped BaseClient."""
     client = BaseClient(base_url="https://httpbin.org", timeout=(3.05, 10.0))
+    yield client
+    client.close()
+
+
+@pytest.fixture(scope="session")
+def projects_client():
+    """Session-scoped ProjectsClient."""
+    from src.clients.projects_client import ProjectsClient
+    client = ProjectsClient(base_url="https://httpbin.org", timeout=(3.05, 10.0))
+    yield client
+    client.close()
+
+
+@pytest.fixture(scope="session")
+def issues_client():
+    """Session-scoped IssuesClient."""
+    from src.clients.issues_client import IssuesClient
+    client = IssuesClient(base_url="https://httpbin.org", timeout=(3.05, 10.0))
     yield client
     client.close()
 
@@ -38,12 +52,13 @@ def cleanup_tracker(api_client):
             print(f"\n[Teardown Warning] Failed to delete {resource_type}/{resource_id}: {e}")
 
 
+@pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """
-    Pytest diagnostic hook.
-    When a test fails, this hook can capture diagnostics, latency, or API failure details
-    making CI/CD failures instantly debuggable without rerunning.
+    Pytest diagnostic hook wrapper.
+    Safely logs test failures using ASCII characters compatible with Windows cp1252.
     """
-    if call.excinfo is not None and call.when == "call":
-        # Log failure diagnostic
-        print(f"\n❌ [FAILURE DIAGNOSTIC] Test '{item.name}' failed in phase '{call.when}'")
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "call" and report.failed:
+        print(f"\n[FAILURE DIAGNOSTIC] Test '{item.name}' failed in phase '{call.when}'")

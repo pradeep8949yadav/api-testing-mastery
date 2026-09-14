@@ -24,7 +24,13 @@ class ApiResponse:
 
     @property
     def headers(self) -> dict[str, str]:
+        """Incoming HTTP response headers."""
         return dict(self._response.headers)
+
+    @property
+    def request_headers(self) -> dict[str, str]:
+        """Outgoing HTTP request headers sent on the wire."""
+        return dict(self._response.request.headers)
 
     @property
     def elapsed_ms(self) -> float:
