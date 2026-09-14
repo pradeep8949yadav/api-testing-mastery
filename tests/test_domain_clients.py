@@ -14,13 +14,14 @@ class TestDomainClients:
             lead_email="architect@atlassian.com",
             description="Mission-critical cloud platform"
         )
-        response.assert_status_code(200)
+        response.assert_status_code(201)
 
         data = response.json()
-        # Verify domain abstraction formatted payload
-        assert data["json"]["name"] == "Atlassian Core Infrastructure"
-        assert data["json"]["key"] == "INFRA"  # Normalized to uppercase
-        assert data["json"]["lead_email"] == "architect@atlassian.com"
+        # Verify created record fields directly from REST backend
+        assert data["name"] == "Atlassian Core Infrastructure"
+        assert data["key"] == "INFRA"
+        assert data["lead_email"] == "architect@atlassian.com"
+        assert "id" in data
 
         # Verify automated correlation trace ID injection on the wire
         assert "X-Request-ID" in response.request_headers

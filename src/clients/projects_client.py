@@ -6,15 +6,11 @@ from src.clients.api_response import ApiResponse
 
 class ProjectsClient(BaseClient):
     """
-    Domain-specific client for Atlassian Project Management APIs.
-    
-    Why Domain Clients over raw API calls?
-    1. Single Source of Truth for Route Endpoints (/api/v1/projects).
-    2. Readability: tests say `projects_client.create_project(...)` instead of raw HTTP dictionaries.
-    3. Resilient Refactoring: If Jira API changes v1 to v2, you update only this class!
+    Domain-specific client for Atlassian Project Management REST APIs.
+    Communicates with /api/v1/projects using proper REST semantics.
     """
 
-    PROJECTS_ENDPOINT = "/post"  # Using reflection endpoint for simulation
+    BASE_ENDPOINT = "/api/v1/projects"
 
     def create_project(
         self,
@@ -26,21 +22,27 @@ class ProjectsClient(BaseClient):
     ) -> ApiResponse:
         payload: dict[str, Any] = {
             "name": name,
-            "key": key.upper(),
+            "key": key,
             "lead_email": lead_email,
         }
-        if description:
+        if description is not None:
             payload["description"] = description
-        return self.post(self.PROJECTS_ENDPOINT, json=payload, **kwargs)
+        return self.post(self.BASE_ENDPOINT, json=payload, **kwargs)
 
     def get_project(self, project_id: str | int, **kwargs) -> ApiResponse:
-        return self.get(f"/get", params={"project_id": project_id}, **kwargs)
+        return self.get(f"{self.BASE_ENDPOINT}/{project_id}", **kwargs)
 
-    def update_project(self, project_id: str | int, updates: dict[str, Any], **kwargs) -> ApiResponse:
-        return self.put(f"/put", json={"project_id": project_id, **updates}, **kwargs)
+    def replace_project(self, project_id: str | int, payload: dict[str, Any], **kwargs) -> ApiResponse:
+        """PUT: Full replacement."""
+        return self.put(f"{self.BASE_ENDPOINT}/{project_id}", json=payload, **kwargs)
+
+    def patch_project(self, project_id: str | int, updates: dict[str, Any], **kwargs) -> ApiResponse:
+        """PATCH: Partial modification."""
+        return self.patch(f"{self.BASE_ENDPOINT}/{project_id}", json=updates, **kwargs)
 
     def delete_project(self, project_id: str | int, **kwargs) -> ApiResponse:
-        return self.delete(f"/delete", params={"project_id": project_id}, **kwargs)
+        """DELETE: Remove resource."""
+        return self.delete(f"{self.BASE_ENDPOINT}/{project_id}", **kwargs)
 
-    def list_projects(self, page: int = 1, limit: int = 50, **kwargs) -> ApiResponse:
-        return self.get(f"/get", params={"page": page, "limit": limit}, **kwargs)
+    def list_projects(self, page: int = 1, limit: int = 10, **kwargs) -> ApiResponse:
+        return self.get(self.BASE_ENDPOINT, params={"page": page, "limit": limit}, **kwargs)

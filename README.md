@@ -14,8 +14,8 @@ Production-grade API Test Automation curriculum, frameworks, and engineering not
 | **04** | Test Data Modeling (`dataclass` vs `Pydantic` vs `dict`) | 🟢 Complete |
 | **05** | Pytest Deep Dive (Fixtures, Scopes, Isolation, Parametrization) | 🟢 Complete |
 | **06** | Enterprise Framework Client Architecture (`BaseClient` & Domains) | 🟢 Complete |
-| **07** | CRUD API Testing & Test Isolation Patterns | 🟡 In Progress |
-| **08** | Contract & JSON Schema Validation | ⚪ Planned |
+| **07** | CRUD API Testing & Test Isolation Patterns | 🟢 Complete |
+| **08** | Contract & JSON Schema Validation | 🟡 In Progress |
 | **09** | Authentication Engines (JWT, OAuth 2.0, Refresh Tokens) | ⚪ Planned |
 | **10** | API Security & OWASP Top 10 (Focus: BOLA / IDOR) | ⚪ Planned |
 | **11** | Database Assertions with SQL & PostgreSQL | ⚪ Planned |
