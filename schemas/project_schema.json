@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectResponseSchema",
+  "description": "Contract definition for Atlassian Project representation",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^PROJ-[0-9]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 100
+    },
+    "key": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{2,10}$"
+    },
+    "lead_email": {
+      "type": "string"
+    },
+    "description": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": ["id", "name", "key", "lead_email", "description"],
+  "additionalProperties": false
+}
