@@ -102,3 +102,48 @@ class TestAuthenticationAndRbac:
         assert data["token_type"] == "Bearer"
         assert "access_token" in data
         assert data["role"] == "Admin"
+
+    @pytest.mark.parametrize(
+        "malformed_header, expected_status, scenario_name",
+        [
+            ("Bearer null", 401, "Frontend Javascript Null Token"),
+            ("Bearer undefined", 401, "Frontend Javascript Undefined Token"),
+            ("Basic YWRtaW46cGFzc3dvcmQ=", 401, "Unsupported Basic Auth Scheme"),
+            ("Bearer ", 401, "Empty Bearer Token"),
+            ("RandomStringWithoutBearer", 401, "Missing Bearer Scheme Prefix"),
+        ],
+        ids=[
+            "NullToken",
+            "UndefinedToken",
+            "BasicScheme",
+            "EmptyToken",
+            "MissingBearerPrefix",
+        ],
+    )
+    def test_malformed_authorization_headers_handled_gracefully(
+        self,
+        projects_client: ProjectsClient,
+        malformed_header: str,
+        expected_status: int,
+        scenario_name: str,
+    ):
+        """Ensure malformed/bogus auth headers return clean 401s and never crash with 500."""
+        res = projects_client.delete(
+            "/api/v1/secure/projects/PROJ-100",
+            headers={"Authorization": malformed_header},
+        )
+        res.assert_status_code(expected_status)
+        assert res.status_code != 500, f"Critical Bug: Server crashed with 500 on {scenario_name}!"
+
+    def test_token_without_admin_role_rejected_cleanly(
+        self, projects_client: ProjectsClient
+    ):
+        """Token with an unassigned or guest role must be rejected with 403 Forbidden."""
+        guest_token = create_token(user_id="guest_user", role="Viewer")
+        res = projects_client.delete(
+            "/api/v1/secure/projects/PROJ-100",
+            headers={"Authorization": f"Bearer {guest_token}"},
+        )
+        res.assert_status_code(403)
+        assert "Forbidden" in res.json()["detail"]
+
