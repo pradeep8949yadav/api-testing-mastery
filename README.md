@@ -17,9 +17,10 @@ Production-grade API Test Automation curriculum, frameworks, and engineering not
 | **07** | CRUD API Testing & Test Isolation Patterns | 🟢 Complete |
 | **08** | Contract & JSON Schema Validation | 🟢 Complete |
 | **09** | Authentication Engines (JWT, OAuth 2.0, Refresh Tokens) | 🟢 Complete |
-| **10** | API Security & OWASP Top 10 (Focus: BOLA / IDOR) | 🟡 In Progress |
-| **11** | Database Assertions with SQL & PostgreSQL | ⚪ Planned |
+| **10** | API Security & OWASP Top 10 (Focus: BOLA / IDOR) | 🟢 Complete |
+| **11** | Database Assertions with SQL & PostgreSQL | 🟡 In Progress |
 | **12** | Mocking & Service Virtualization | ⚪ Planned |
+
 | **13** | Asynchronous APIs, Polling & Webhooks | ⚪ Planned |
 | **14** | Advanced Query Testing (Pagination, Filtering, Sorting) | ⚪ Planned |
 | **15** | Concurrency, Race Conditions & Lost Updates | ⚪ Planned |

@@ -71,3 +71,24 @@ def create_expired_refresh_token(user_id: str, role: Literal["Admin", "Developer
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
+
+def create_tenant_token(
+    user_id: str,
+    tenant_id: str,
+    role: Literal["Admin", "Developer", "Viewer"] = "Developer",
+    expires_in_seconds: int = 900,
+    secret_key: str = JWT_SECRET_KEY,
+) -> str:
+    """Generate a JWT token with tenant isolation claims."""
+    now = int(time.time())
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "role": role,
+        "type": "access",
+        "iat": now,
+        "exp": now + expires_in_seconds,
+    }
+    return jwt.encode(payload, secret_key, algorithm=JWT_ALGORITHM)
+
+

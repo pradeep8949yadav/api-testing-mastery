@@ -297,3 +297,110 @@ def secure_delete_project(project_id: str, authorization: Optional[str] = Header
         del _projects_db[project_id]
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+
+# ─── OBJECT-LEVEL AUTHORIZATION (BOLA / IDOR PROTECTED) ───
+
+class TenantProjectCreateModel(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    key: str = Field(..., min_length=2, max_length=10)
+    lead_email: str
+    description: Optional[str] = None
+
+
+@app.post("/api/v1/tenant/projects", status_code=status.HTTP_201_CREATED)
+def create_tenant_project(payload: TenantProjectCreateModel, authorization: Optional[str] = Header(default=None)):
+    """Create a project strictly bound to the authenticated tenant's identity."""
+    user_claims = _verify_auth_token(authorization)
+    tenant_id = user_claims.get("tenant_id", user_claims.get("sub"))
+    owner = user_claims.get("sub")
+
+    global _id_counter
+    with _lock:
+        key_upper = payload.key.upper()
+        _id_counter += 1
+        project_id = f"PROJ-{_id_counter}"
+        record = {
+            "id": project_id,
+            "name": payload.name,
+            "key": key_upper,
+            "lead_email": payload.lead_email,
+            "description": payload.description,
+            "tenant_id": tenant_id,
+            "owner": owner,
+        }
+        _projects_db[project_id] = record
+        return record
+
+
+@app.get("/api/v1/tenant/projects/{project_id}")
+def get_tenant_project(project_id: str, authorization: Optional[str] = Header(default=None)):
+    """
+    BOLA/IDOR Protected Read:
+    Returns 404 if project does not exist OR belongs to another tenant (Zero Metadata Leakage).
+    """
+    user_claims = _verify_auth_token(authorization)
+    caller_tenant = user_claims.get("tenant_id", user_claims.get("sub"))
+
+    with _lock:
+        project = _projects_db.get(project_id)
+        if not project or project.get("tenant_id") != caller_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project_id}' not found.",
+            )
+        return project
+
+
+@app.patch("/api/v1/tenant/projects/{project_id}")
+def update_tenant_project(
+    project_id: str,
+    payload: ProjectPatchModel,
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    BOLA/IDOR Protected Mutation:
+    Only the resource owner/tenant can modify it. Discards any injected tenant_id.
+    """
+    user_claims = _verify_auth_token(authorization)
+    caller_tenant = user_claims.get("tenant_id", user_claims.get("sub"))
+
+    with _lock:
+        project = _projects_db.get(project_id)
+        if not project or project.get("tenant_id") != caller_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project_id}' not found.",
+            )
+        
+        updates = payload.model_dump(exclude_unset=True)
+        # Prevent tenant parameter injection
+        updates.pop("tenant_id", None)
+        updates.pop("owner", None)
+        if "key" in updates and updates["key"]:
+            updates["key"] = updates["key"].upper()
+
+        project.update(updates)
+        _projects_db[project_id] = project
+        return project
+
+
+@app.delete("/api/v1/tenant/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tenant_project(project_id: str, authorization: Optional[str] = Header(default=None)):
+    """
+    BOLA/IDOR Protected Destruction:
+    Prevents cross-tenant project deletion.
+    """
+    user_claims = _verify_auth_token(authorization)
+    caller_tenant = user_claims.get("tenant_id", user_claims.get("sub"))
+
+    with _lock:
+        project = _projects_db.get(project_id)
+        if not project or project.get("tenant_id") != caller_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project_id}' not found.",
+            )
+        del _projects_db[project_id]
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
