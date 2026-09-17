@@ -172,9 +172,13 @@ class LoginModel(BaseModel):
     role: Optional[str] = "Developer"
 
 
+class RefreshTokenModel(BaseModel):
+    refresh_token: str
+
+
 @app.post("/api/v1/auth/login", status_code=status.HTTP_200_OK)
 def login(payload: LoginModel):
-    """Simulate OAuth/JWT token issuance."""
+    """Simulate OAuth/JWT token issuance with short-lived access and long-lived refresh tokens."""
     import time
     if payload.password == "wrong_password":
         raise HTTPException(
@@ -183,19 +187,70 @@ def login(payload: LoginModel):
         )
     
     now = int(time.time())
-    token_payload = {
+    access_payload = {
         "sub": payload.username,
         "role": payload.role,
+        "type": "access",
         "iat": now,
         "exp": now + 900,  # 15 minutes
     }
-    token = jwt.encode(token_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    refresh_payload = {
+        "sub": payload.username,
+        "role": payload.role,
+        "type": "refresh",
+        "iat": now,
+        "exp": now + 604800,  # 7 days
+    }
+    access_token = jwt.encode(access_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    refresh_token = jwt.encode(refresh_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return {
-        "access_token": token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "Bearer",
         "expires_in": 900,
         "role": payload.role,
     }
+
+
+@app.post("/api/v1/auth/refresh", status_code=status.HTTP_200_OK)
+def refresh_token(payload: RefreshTokenModel):
+    """Validate refresh token and issue a fresh access token."""
+    import time
+    try:
+        claims = jwt.decode(payload.refresh_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired. Please re-authenticate.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token signature.",
+        )
+
+    if claims.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type. Only refresh tokens are permitted on this endpoint.",
+        )
+
+    now = int(time.time())
+    new_access_payload = {
+        "sub": claims.get("sub"),
+        "role": claims.get("role"),
+        "type": "access",
+        "iat": now,
+        "exp": now + 900,
+    }
+    new_access_token = jwt.encode(new_access_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return {
+        "access_token": new_access_token,
+        "token_type": "Bearer",
+        "expires_in": 900,
+        "role": claims.get("role"),
+    }
+
 
 
 def _verify_auth_token(authorization: Optional[str]) -> dict[str, Any]:

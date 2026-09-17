@@ -30,6 +30,8 @@ class BaseClient:
     ):
         self.base_url = base_url.rstrip("/") + "/"
         self.timeout = timeout
+        self.refresh_token: str | None = None
+        self.auth_refresh_endpoint: str = "api/v1/auth/refresh"
 
         # 1. Initialize persistent session
         self.session = requests.Session()
@@ -57,12 +59,36 @@ class BaseClient:
             self.session.mount("https://", adapter)
             self.session.mount("http://", adapter)
 
+    def set_auth_tokens(self, access_token: str | None = None, refresh_token: str | None = None) -> None:
+        """Configure authorization Bearer token and optional refresh token for auto-refresh."""
+        if access_token:
+            self.session.headers["Authorization"] = f"Bearer {access_token}"
+        if refresh_token:
+            self.refresh_token = refresh_token
+
+    def _refresh_access_token(self) -> bool:
+        """Call refresh endpoint to obtain and apply a new access token. Returns True on success."""
+        if not self.refresh_token:
+            return False
+        url = self._build_url(self.auth_refresh_endpoint)
+        try:
+            resp = requests.post(url, json={"refresh_token": self.refresh_token}, timeout=self.timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                new_token = data.get("access_token")
+                if new_token:
+                    self.session.headers["Authorization"] = f"Bearer {new_token}"
+                    return True
+        except Exception:
+            pass
+        return False
+
     def _build_url(self, endpoint: str) -> str:
         """Safely join base_url and endpoint without duplicate slashes."""
         return urljoin(self.base_url, endpoint.lstrip("/"))
 
-    def _send_request(self, method: str, endpoint: str, **kwargs) -> ApiResponse:
-        """Internal dispatcher that injects trace IDs, applies timeouts, and wraps response."""
+    def _send_request(self, method: str, endpoint: str, _is_retry: bool = False, **kwargs) -> ApiResponse:
+        """Internal dispatcher that injects trace IDs, applies timeouts, intercepts 401s for refresh, and wraps response."""
         import uuid
 
         url = self._build_url(endpoint)
@@ -78,7 +104,18 @@ class BaseClient:
         kwargs["headers"] = request_headers
 
         raw_response = self.session.request(method=method, url=url, **kwargs)
+
+        # 401 Interceptor: If access token expired and refresh token is configured, refresh & retry once
+        if raw_response.status_code == 401 and self.refresh_token and not _is_retry:
+            if self._refresh_access_token():
+                # Re-apply new authorization header if request-specific headers override was present
+                if "Authorization" in kwargs["headers"]:
+                    kwargs["headers"]["Authorization"] = self.session.headers.get("Authorization")
+                return self._send_request(method=method, endpoint=endpoint, _is_retry=True, **kwargs)
+
         return ApiResponse(raw_response)
+
+
 
     def get(self, endpoint: str, params: dict[str, Any] | None = None, **kwargs) -> ApiResponse:
         return self._send_request("GET", endpoint, params=params, **kwargs)
