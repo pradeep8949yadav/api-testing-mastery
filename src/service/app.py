@@ -404,3 +404,106 @@ def delete_tenant_project(project_id: str, authorization: Optional[str] = Header
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# ─── SQL PERSISTENCE ENDPOINTS (MODULE 11 DATABASE INVARIANTS) ───
+
+import sqlite3
+from src.utils.db_client import DB_FILE_PATH
+
+
+def _get_sql_connection():
+    conn = sqlite3.connect(DB_FILE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@app.post("/api/v1/sql/projects", status_code=status.HTTP_201_CREATED)
+def create_sql_project(payload: ProjectCreateModel, tenant_id: str = Query(default="org_default")):
+    key_upper = payload.key.upper()
+    # Validate email
+    parts = payload.lead_email.strip().split("@")
+    if len(parts) != 2 or not parts[0] or "." not in parts[1] or not parts[1].split(".")[0]:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid lead email format: '{payload.lead_email}'.",
+        )
+
+    with _get_sql_connection() as conn:
+        # Check uniqueness
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM sql_projects WHERE key = ?", (key_upper,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Project key '{key_upper}' already exists.",
+            )
+
+        import uuid
+        project_id = f"PROJ-{uuid.uuid4().hex[:8].upper()}"
+        cursor.execute("""
+            INSERT INTO sql_projects (id, key, name, lead_email, description, tenant_id, version, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 1)
+        """, (project_id, key_upper, payload.name, payload.lead_email, payload.description, tenant_id))
+        conn.commit()
+
+        cursor.execute("SELECT * FROM sql_projects WHERE id = ?", (project_id,))
+        return dict(cursor.fetchone())
+
+
+@app.get("/api/v1/sql/projects/{project_id}")
+def get_sql_project(project_id: str):
+    with _get_sql_connection() as conn:
+        cursor = conn.cursor()
+        # Soft-delete filter: only active, non-deleted rows
+        cursor.execute("SELECT * FROM sql_projects WHERE id = ? AND is_active = 1 AND deleted_at IS NULL", (project_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found.")
+        return dict(row)
+
+
+@app.patch("/api/v1/sql/projects/{project_id}")
+def patch_sql_project(project_id: str, payload: ProjectPatchModel):
+    with _get_sql_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sql_projects WHERE id = ? AND is_active = 1", (project_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found.")
+
+        updates = payload.model_dump(exclude_unset=True)
+        new_name = updates.get("name", existing["name"])
+        new_desc = updates.get("description", existing["description"])
+        new_lead = updates.get("lead_email", existing["lead_email"])
+        new_key = updates.get("key", existing["key"]).upper()
+
+        cursor.execute("""
+            UPDATE sql_projects 
+            SET name = ?, description = ?, lead_email = ?, key = ?, 
+                version = version + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (new_name, new_desc, new_lead, new_key, project_id))
+        conn.commit()
+
+        cursor.execute("SELECT * FROM sql_projects WHERE id = ?", (project_id,))
+        return dict(cursor.fetchone())
+
+
+@app.delete("/api/v1/sql/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sql_project(project_id: str):
+    """Soft delete endpoint: Sets is_active = 0 and sets deleted_at timestamp."""
+    with _get_sql_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sql_projects WHERE id = ? AND is_active = 1", (project_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found.")
+
+        cursor.execute("""
+            UPDATE sql_projects 
+            SET is_active = 0, deleted_at = CURRENT_TIMESTAMP, version = version + 1
+            WHERE id = ?
+        """, (project_id,))
+        conn.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+

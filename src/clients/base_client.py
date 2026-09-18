@@ -52,7 +52,7 @@ class BaseClient:
                 total=max_retries,
                 backoff_factor=0.5,  # 0.5s, 1.0s, 2.0s exponential backoff
                 status_forcelist=[429, 500, 502, 503, 504],
-                allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS"],  # Idempotent only!
+                allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "POST"],
                 raise_on_status=False,  # Let ApiResponse handle status verification
             )
             adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=10)
