@@ -23,14 +23,15 @@ class ApiResponse:
         return self._response.status_code
 
     @property
-    def headers(self) -> dict[str, str]:
-        """Incoming HTTP response headers."""
-        return dict(self._response.headers)
+    def headers(self) -> Any:
+        """Incoming HTTP response headers (case-insensitive dictionary)."""
+        return self._response.headers
 
     @property
-    def request_headers(self) -> dict[str, str]:
+    def request_headers(self) -> Any:
         """Outgoing HTTP request headers sent on the wire."""
-        return dict(self._response.request.headers)
+        return self._response.request.headers
+
 
     @property
     def elapsed_ms(self) -> float:

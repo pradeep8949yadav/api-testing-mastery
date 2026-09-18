@@ -506,4 +506,118 @@ def delete_sql_project(project_id: str):
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+# ─── ASYNCHRONOUS JOBS & WEBHOOKS (MODULE 13) ───
+
+import hmac
+import hashlib
+from fastapi import Request
+
+from fastapi.responses import JSONResponse
+
+_async_jobs: dict[str, dict[str, Any]] = {}
+WEBHOOK_SHARED_SECRET = "atlassian-sdet-webhook-secret-production-key"
+
+
+class ExportJobRequest(BaseModel):
+    job_type: str = "issues_csv"
+    fail_intentionally: bool = False
+    never_finish: bool = False
+
+
+@app.post("/api/v1/jobs/export", status_code=status.HTTP_202_ACCEPTED)
+def start_export_job(payload: ExportJobRequest):
+    """
+    HTTP 202 Accepted Pattern:
+    Accepts job, assigns job_id, sets Location and Retry-After headers, and returns 202.
+    """
+    import uuid
+    job_id = f"job-{uuid.uuid4().hex[:8]}"
+    with _lock:
+        _async_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "QUEUED",
+            "progress_pct": 0,
+            "fail": payload.fail_intentionally,
+            "hang": payload.never_finish,
+            "polls": 0,
+        }
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        headers={
+            "Location": f"/api/v1/jobs/export/{job_id}",
+            "Retry-After": "0",
+        },
+        content={
+            "job_id": job_id,
+            "status": "QUEUED",
+            "message": "Export job accepted and scheduled for asynchronous background execution.",
+        },
+    )
+
+
+@app.get("/api/v1/jobs/export/{job_id}")
+def get_export_job_status(job_id: str):
+    """Poll endpoint that simulates asynchronous background execution."""
+    with _lock:
+        if job_id not in _async_jobs:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Job '{job_id}' not found.")
+        
+        job = _async_jobs[job_id]
+        job["polls"] += 1
+
+        if job["hang"]:
+            job["status"] = "PROCESSING"
+            job["progress_pct"] = 15
+            return JSONResponse(content=job, headers={"Retry-After": "0"})
+
+        if job["fail"] and job["polls"] >= 2:
+            job["status"] = "FAILED"
+            job["error"] = "Worker process terminated unexpectedly during CSV serialization."
+            return JSONResponse(content=job)
+
+        if job["polls"] == 1:
+            job["status"] = "PROCESSING"
+            job["progress_pct"] = 50
+            return JSONResponse(content=job, headers={"Retry-After": "0"})
+        else:
+            job["status"] = "COMPLETED"
+            job["progress_pct"] = 100
+            job["download_url"] = f"https://storage.atlassian.net/exports/{job_id}.csv"
+            return JSONResponse(content=job)
+
+
+
+@app.post("/api/v1/webhooks/listener", status_code=status.HTTP_200_OK)
+async def receive_webhook(request: Request):
+    """
+    Webhook Receiver with HMAC-SHA256 Signature Verification:
+    Validates X-Hub-Signature-256 header against the raw body using constant-time comparison.
+    """
+    raw_body = await request.body()
+    signature_header = request.headers.get("X-Hub-Signature-256")
+
+    if not signature_header or not signature_header.startswith("sha256="):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed X-Hub-Signature-256 header.",
+        )
+
+    provided_signature = signature_header.split("sha256=")[1].strip()
+    expected_signature = hmac.new(
+        WEBHOOK_SHARED_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cryptographic HMAC signature verification failed. Untrusted webhook source.",
+        )
+
+    return {"status": "event_acknowledged", "payload_bytes": len(raw_body)}
+
+
+
 
